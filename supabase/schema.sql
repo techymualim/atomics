@@ -34,15 +34,27 @@ create table if not exists logs (
   unique(atomic_id, date)
 );
 
+-- Push tokens table: one row per device, used by FCM/Expo push to target a user
+create table if not exists push_tokens (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid references auth.users(id) on delete cascade not null,
+  token text not null unique,
+  platform text,
+  updated_at timestamptz default now(),
+  created_at timestamptz default now()
+);
+
 -- Indexes
 create index if not exists idx_atomics_user on atomics(user_id);
 create index if not exists idx_logs_user on logs(user_id);
 create index if not exists idx_logs_atomic on logs(atomic_id);
 create index if not exists idx_logs_date on logs(date);
+create index if not exists idx_push_tokens_user on push_tokens(user_id);
 
 -- Row Level Security
 alter table atomics enable row level security;
 alter table logs enable row level security;
+alter table push_tokens enable row level security;
 
 -- Policies: users can only access their own data
 create policy "Users can view own atomics"
@@ -75,4 +87,20 @@ create policy "Users can update own logs"
 
 create policy "Users can delete own logs"
   on logs for delete
+  using (auth.uid() = user_id);
+
+create policy "Users can view own push tokens"
+  on push_tokens for select
+  using (auth.uid() = user_id);
+
+create policy "Users can insert own push tokens"
+  on push_tokens for insert
+  with check (auth.uid() = user_id);
+
+create policy "Users can update own push tokens"
+  on push_tokens for update
+  using (auth.uid() = user_id);
+
+create policy "Users can delete own push tokens"
+  on push_tokens for delete
   using (auth.uid() = user_id);

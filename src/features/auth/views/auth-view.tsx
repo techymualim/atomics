@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -10,31 +10,29 @@ import {
   Alert,
   ActivityIndicator,
 } from "react-native";
-import { C } from "../lib/constants";
-import { useAuth } from "../hooks/useAuth";
+import { C } from "../../../lib/theme";
+import { useAuthService } from "../auth-service";
 
-export default function AuthScreen() {
-  const { signIn, signUp } = useAuth();
+export default function AuthView() {
+  const { busy, error, clearError, signIn, signUp } = useAuthService();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isSignUp, setIsSignUp] = useState(false);
-  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (error) {
+      Alert.alert("Auth error", error, [{ text: "OK", onPress: clearError }]);
+    }
+  }, [error, clearError]);
 
   const handleSubmit = async () => {
-    if (!email.trim() || !password.trim()) {
-      Alert.alert("Missing fields", "Enter both email and password.");
-      return;
-    }
-    setBusy(true);
-    const { error } = isSignUp
-      ? await signUp(email.trim(), password)
-      : await signIn(email.trim(), password);
-    setBusy(false);
-
-    if (error) {
-      Alert.alert("Auth error", error.message);
-    } else if (isSignUp) {
-      Alert.alert("Check your email", "We sent a confirmation link.");
+    if (isSignUp) {
+      const { ok, needsConfirmation } = await signUp(email, password);
+      if (ok && needsConfirmation) {
+        Alert.alert("Check your email", "We sent you a confirmation link.");
+      }
+    } else {
+      await signIn(email, password);
     }
   };
 
@@ -88,7 +86,7 @@ export default function AuthScreen() {
 
         <TouchableOpacity
           style={styles.switchBtn}
-          onPress={() => setIsSignUp(!isSignUp)}
+          onPress={() => setIsSignUp((v) => !v)}
         >
           <Text style={styles.switchText}>
             {isSignUp
@@ -102,21 +100,9 @@ export default function AuthScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: C.bg,
-  },
-  inner: {
-    flex: 1,
-    justifyContent: "center",
-    paddingHorizontal: 28,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 9,
-    marginBottom: 8,
-  },
+  root: { flex: 1, backgroundColor: C.bg },
+  inner: { flex: 1, justifyContent: "center", paddingHorizontal: 28 },
+  header: { flexDirection: "row", alignItems: "center", gap: 9, marginBottom: 8 },
   dot: {
     width: 9,
     height: 9,
@@ -165,13 +151,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: C.bg,
   },
-  switchBtn: {
-    marginTop: 18,
-    alignItems: "center",
-  },
-  switchText: {
-    fontFamily: "monospace",
-    fontSize: 12,
-    color: C.muted,
-  },
+  switchBtn: { marginTop: 18, alignItems: "center" },
+  switchText: { fontFamily: "monospace", fontSize: 12, color: C.muted },
 });

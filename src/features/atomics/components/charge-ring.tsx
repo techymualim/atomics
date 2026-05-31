@@ -1,24 +1,26 @@
 import React, { useEffect, useRef } from "react";
-import { View, Animated, Easing, StyleSheet } from "react-native";
+import { View, Animated, Easing, Text, StyleSheet } from "react-native";
 import Svg, { Circle } from "react-native-svg";
-import { C } from "../lib/constants";
+import { C } from "../../../lib/theme";
 
 const R = 46;
 const CIRC = 2 * Math.PI * R;
 
-export default function ChargeRing({ pct }) {
+export default function ChargeRing({ pct }: { pct: number }) {
   const spin = useRef(new Animated.Value(0)).current;
   const offset = CIRC - (pct / 100) * CIRC;
 
   useEffect(() => {
-    Animated.loop(
+    const loop = Animated.loop(
       Animated.timing(spin, {
         toValue: 1,
         duration: 6000,
         easing: Easing.linear,
         useNativeDriver: true,
       })
-    ).start();
+    );
+    loop.start();
+    return () => loop.stop();
   }, [spin]);
 
   const rotate = spin.interpolate({
@@ -29,14 +31,7 @@ export default function ChargeRing({ pct }) {
   return (
     <View style={styles.container}>
       <Svg width={112} height={112} style={{ transform: [{ rotate: "-90deg" }] }}>
-        <Circle
-          cx={56}
-          cy={56}
-          r={R}
-          fill="none"
-          stroke={C.line}
-          strokeWidth={7}
-        />
+        <Circle cx={56} cy={56} r={R} fill="none" stroke={C.line} strokeWidth={7} />
         <Circle
           cx={56}
           cy={56}
@@ -49,30 +44,20 @@ export default function ChargeRing({ pct }) {
           strokeDashoffset={offset}
         />
       </Svg>
-      <Animated.View
-        style={[styles.orbit, { transform: [{ rotate }] }]}
-      >
+      <Animated.View style={[styles.orbit, { transform: [{ rotate }] }]}>
         <View style={styles.electron} />
       </Animated.View>
       <View style={styles.label}>
-        <Animated.Text style={styles.labelText}>nucleus</Animated.Text>
-        <Animated.Text style={styles.labelSub}>→ 100%</Animated.Text>
+        <Text style={styles.labelText}>nucleus</Text>
+        <Text style={styles.labelSub}>→ 100%</Text>
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    width: 112,
-    height: 112,
-    position: "relative",
-  },
-  orbit: {
-    position: "absolute",
-    width: 112,
-    height: 112,
-  },
+  container: { width: 112, height: 112, position: "relative" },
+  orbit: { position: "absolute", width: 112, height: 112 },
   electron: {
     position: "absolute",
     top: 4,
@@ -81,6 +66,10 @@ const styles = StyleSheet.create({
     height: 7,
     borderRadius: 7,
     backgroundColor: C.accent,
+    shadowColor: C.accent,
+    shadowOpacity: 0.9,
+    shadowRadius: 5,
+    elevation: 5,
   },
   label: {
     position: "absolute",
@@ -91,15 +80,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  labelText: {
-    fontFamily: "monospace",
-    fontSize: 11,
-    color: C.muted,
-  },
-  labelSub: {
-    fontFamily: "monospace",
-    fontSize: 9,
-    color: C.faint,
-    marginTop: 2,
-  },
+  labelText: { fontFamily: "monospace", fontSize: 11, color: C.muted },
+  labelSub: { fontFamily: "monospace", fontSize: 9, color: C.faint, marginTop: 2 },
 });
