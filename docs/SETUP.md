@@ -12,8 +12,9 @@ working auth, data sync, and notifications.
 - **Node 18+** and npm
 - **Expo** tooling (`npx expo …`, no global install needed)
 - A **Supabase** account → https://supabase.com
-- A **Firebase** project (for Android/iOS push) → https://console.firebase.google.com
 - For push notifications on a real build: an **Expo (EAS)** account → https://expo.dev
+- **iOS:** a paid **Apple Developer** account (required by APNs)
+- **Android only:** a **Firebase** project (FCM transport) → https://console.firebase.google.com
 
 ```bash
 git clone <repo-url>
@@ -96,39 +97,53 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=YOUR-ANON-KEY
 
 ---
 
-## 3. Firebase Cloud Messaging (push notifications)
+## 3. Push notifications
 
-Expo routes Android pushes through **FCM** and iOS through **APNs**. Local
-reminders (the daily check-in nudge) work without any of this — but to send
-remote pushes you need the steps below.
+How the transport works:
 
-### 3a. Android (FCM)
+- **iOS** — Expo's push service delivers straight to **APNs**. You do **not**
+  need Firebase on iOS. (Firebase/FCM on iOS is only relevant if you swap in the
+  native `@react-native-firebase/messaging` SDK, which this app does not use.)
+- **Android** — Expo's push service delivers through **Firebase Cloud
+  Messaging (FCM)**, so Android needs a Firebase project + `google-services.json`.
 
-1. In the [Firebase console](https://console.firebase.google.com), create (or
-   open) a project and **add an Android app** with package name
-   `com.atomics.app` (must match `app.json`).
-2. Download **`google-services.json`** and place it in the project root
-   (the path is already referenced by `app.json` → `android.googleServicesFile`).
-3. In **Firebase → Project Settings → Cloud Messaging**, make sure the
-   **Firebase Cloud Messaging API (V1)** is enabled.
-4. Give Expo the FCM credentials so its push service can deliver to your app:
+The **daily check-in reminder** is a *local* notification — it needs only
+notification permission and works on a simulator/device without any of the
+backend credentials below.
+
+### 3a. iOS (APNs) — primary path
+
+1. You need a paid **Apple Developer account** ($99/yr) — APNs requires it.
+2. Set your EAS project id (see §3c) and `ios.bundleIdentifier` in `app.json`
+   (already `com.atomics.app` — change it to something you own).
+3. Let EAS create and upload the APNs key for you:
    ```bash
    npx eas credentials
    ```
-   Select **Android → Push Notifications (FCM V1)** and upload the service
-   account JSON from Firebase (**Project Settings → Service accounts →
-   Generate new private key**).
+   Select **iOS → Push Notifications: Manage your Apple Push Notifications Key**
+   → *Set up a new key*. EAS stores it; you never touch certificates by hand.
+4. The push capability/entitlement (`aps-environment`) and the
+   `remote-notification` background mode are added automatically by the
+   `expo-notifications` plugin + `app.json` during the build — no manual Xcode
+   steps.
 
-### 3b. iOS (APNs)
+> iOS push tokens only resolve on a **real device** with a **dev/production
+> build** (not Expo Go, not the simulator). Local reminders work on the
+> simulator.
 
-1. Add an **iOS app** to the same Firebase project with bundle id
-   `com.atomics.app` and download **`GoogleService-Info.plist`** into the
-   project root (referenced by `app.json` → `ios.googleServicesFile`).
-2. You need an Apple Developer account. Let EAS manage the APNs key:
+### 3b. Android (FCM) — only if you also ship Android
+
+1. In the [Firebase console](https://console.firebase.google.com), create a
+   project and **add an Android app** with package `com.atomics.app`.
+2. Download **`google-services.json`** into the project root (referenced by
+   `app.json` → `android.googleServicesFile`).
+3. Enable the **Cloud Messaging API (V1)** under Project Settings → Cloud
+   Messaging.
+4. Upload the FCM V1 service-account key to EAS:
    ```bash
    npx eas credentials
    ```
-   Select **iOS → Push Notifications** and let EAS create/upload the key.
+   Select **Android → Push Notifications (FCM V1)**.
 
 ### 3c. EAS project id
 
@@ -155,15 +170,29 @@ npx expo start
 Scan the QR code with Expo Go. Email auth, Supabase sync, onboarding, and the
 **scheduled local reminder** all work here. Remote FCM pushes do not.
 
-### Development build (full push support)
+### iOS development build (full push support)
+
+Remote push needs a real build on a real device. The build profiles live in
+`eas.json`.
 
 ```bash
 npx expo install expo-dev-client
-npx eas build --profile development --platform android   # or ios
+npx eas build --profile development --platform ios
 ```
 
-Install the resulting build on a physical device, then `npx expo start
---dev-client`.
+EAS handles signing and the APNs key (§3a). Install the build on your iPhone,
+then start the dev server and open it from the app:
+
+```bash
+npx expo start --dev-client
+```
+
+> On a Mac you can also run locally with `npx expo run:ios` (requires Xcode).
+> The iOS **simulator** runs the app and local reminders but cannot receive
+> remote push tokens — use a physical device for those.
+
+The same command with `--platform android` builds the Android dev client if you
+ever ship there.
 
 ### Sending a test push
 
@@ -213,6 +242,7 @@ npx eas build        # production / dev builds
 |---|---|
 | `Invalid API key` on sign-in | Check `.env` values and restart `expo start -c` |
 | Rows not saving | Confirm `schema.sql` ran and RLS policies exist |
-| No push token | Use a real device + dev build (not Expo Go), and set `extra.eas.projectId` |
+| No push token | Use a real device + dev build (not Expo Go / simulator), and set `extra.eas.projectId` |
+| iOS push silent | Confirm the APNs key is set in `eas credentials` and you're on a physical device |
 | Android push silent | Verify `google-services.json` + FCM V1 credentials in `eas credentials` |
 | Reminder never fires | Grant notification permission; the daily trigger fires at the next 09:00 |

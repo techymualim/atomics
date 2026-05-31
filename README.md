@@ -4,8 +4,8 @@
 in its trigger slot, with a load-neutral upgrade — and let it compound.
 
 Built with **Expo / React Native + TypeScript**, **Supabase** (auth + data), and
-**Firebase Cloud Messaging** (push). Organized with a feature-based clean
-architecture.
+push notifications (**APNs** on iOS, **FCM** on Android). Organized with a
+feature-based clean architecture.
 
 > **The thesis:** No fragile streaks. Each atomic is an if-then plan that only
 > graduates once it has survived hard days. One active atomic at a time — the app
@@ -49,7 +49,7 @@ src/
 └─ features/
    ├─ auth/               # email/password via Supabase
    ├─ atomics/            # the core tracker
-   ├─ notifications/      # FCM push + daily local reminder
+   ├─ notifications/      # push (APNs/FCM) + daily local reminder
    └─ onboarding/         # how-to-use walkthrough
 ```
 
@@ -60,7 +60,7 @@ src/
 - **Charge model** that never resets to zero; graduation gated on 2+ hard days
 - **One-at-a-time queue** with automatic promotion on graduation
 - **Onboarding** walkthrough on first launch
-- **Daily reminder** + Firebase Cloud Messaging push support
+- **Daily reminder** + remote push (APNs on iOS, FCM on Android)
 
 ## Scripts
 
