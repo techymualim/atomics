@@ -60,7 +60,7 @@ src/
 - **Charge model** that never resets to zero; graduation gated on 2+ hard days
 - **One-at-a-time queue** with automatic promotion on graduation
 - **Onboarding** walkthrough on first launch
-- **Daily reminder** + remote push (APNs on iOS, FCM on Android)
+- **Daily reminder** — local notification + server-side nudge (Supabase Edge Function + pg_cron → Expo push → APNs)
 
 ## Scripts
 

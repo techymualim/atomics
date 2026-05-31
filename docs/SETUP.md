@@ -205,12 +205,86 @@ curl -X POST https://exp.host/--/api/v2/push/send \
   -d '{"to":"ExponentPushToken[xxx]","title":"ATOMICS","body":"Run the move?"}'
 ```
 
-For production, send from a **Supabase Edge Function** that reads `push_tokens`
-and calls the Expo push API (or FCM directly).
+---
+
+## 5. Server-side daily nudge (Supabase Edge Function + pg_cron)
+
+The app already schedules a **local** daily reminder on the device. But if the
+user force-quits the app or hasn't opened it in days, local notifications stop
+firing. The **daily-nudge Edge Function** solves this: it runs on a cron
+schedule, checks which users haven't logged today, and pushes a reminder through
+Expo's push service (→ APNs on iOS, → FCM on Android).
+
+### 5a. Deploy the Edge Function
+
+Install the [Supabase CLI](https://supabase.com/docs/guides/cli) if you haven't:
+
+```bash
+npm install -g supabase
+supabase login
+supabase link --project-ref YOUR_PROJECT_REF
+```
+
+Set the secret the cron job uses to authenticate with the function:
+
+```bash
+supabase secrets set CRON_SECRET=$(openssl rand -hex 32)
+```
+
+Deploy:
+
+```bash
+supabase functions deploy daily-nudge --no-verify-jwt
+```
+
+`--no-verify-jwt` is used because the function authenticates via the
+`CRON_SECRET` header instead of a user JWT — it runs as a service-role call,
+not on behalf of a logged-in user.
+
+### 5b. Schedule with pg_cron
+
+Open the **SQL Editor** in your Supabase dashboard and run
+[`supabase/cron.sql`](../supabase/cron.sql). This schedules the function to
+fire every day at **09:00 UTC**.
+
+Before running the SQL, set the two `app.settings` values the cron job reads.
+Go to **Dashboard → Project Settings → Configuration → Database → Custom
+Configuration** and add:
+
+| Setting | Value |
+|---|---|
+| `app.settings.supabase_url` | `https://YOUR-PROJECT.supabase.co` |
+| `app.settings.cron_secret` | The same value you used in `supabase secrets set` |
+
+To change the schedule time, see the comment at the bottom of `cron.sql`.
+
+### 5c. How it works
+
+1. Queries all users with an active (non-graduated) atomic AND at least one
+   registered push token.
+2. Left-joins today's logs — any user who has already logged a `ran` or `missed`
+   is skipped (no duplicate nagging).
+3. Sends the remaining tokens to Expo's push endpoint in batches of 100.
+4. Cleans up `DeviceNotRegistered` tokens automatically (stale installs).
+
+### 5d. Verifying the function
+
+Invoke it manually to make sure it works before waiting for the cron:
+
+```bash
+curl -X POST https://YOUR-PROJECT.supabase.co/functions/v1/daily-nudge \
+  -H "Authorization: Bearer YOUR_CRON_SECRET"
+```
+
+You should get a JSON response like `{"sent":1,"total":1,"errors":[]}`.
+
+> **Requires pg_cron + pg_net** (enabled by default on **Supabase Pro**). On the
+> free tier, use an external scheduler (GitHub Actions, Vercel Cron, Railway,
+> cron-job.org) that hits the function URL on a schedule instead.
 
 ---
 
-## 5. How the app works (user flow)
+## 6. How the app works (user flow)
 
 1. **Onboarding** — a 4-screen walkthrough explaining the swap model, daily
    check-ins, hard-day scoring, and the one-at-a-time queue. Shown once.
@@ -226,7 +300,7 @@ and calls the Expo push API (or FCM directly).
 
 ---
 
-## 6. Type checking & scripts
+## 7. Type checking & scripts
 
 ```bash
 npx tsc --noEmit     # type-check the whole project
@@ -236,7 +310,7 @@ npx eas build        # production / dev builds
 
 ---
 
-## 7. Troubleshooting
+## 8. Troubleshooting
 
 | Symptom | Fix |
 |---|---|
@@ -246,3 +320,6 @@ npx eas build        # production / dev builds
 | iOS push silent | Confirm the APNs key is set in `eas credentials` and you're on a physical device |
 | Android push silent | Verify `google-services.json` + FCM V1 credentials in `eas credentials` |
 | Reminder never fires | Grant notification permission; the daily trigger fires at the next 09:00 |
+| Edge Function returns 401 | `CRON_SECRET` doesn't match between `supabase secrets` and `app.settings` |
+| Edge Function returns 500 | Check Supabase logs; likely a missing `push_tokens` table or RLS policy |
+| No nudge after force-quit | Deploy the Edge Function (§5) — local reminders stop when the app is killed |
